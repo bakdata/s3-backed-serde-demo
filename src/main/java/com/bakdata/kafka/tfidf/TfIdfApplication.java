@@ -57,8 +57,8 @@ public class TfIdfApplication extends KafkaStreamsApplication {
                 builder.stream(this.getInputTopics());
 
         // count number of documents (used in idf)
-        texts.mapValues((k, v) -> "")
-                .groupBy((k, v) -> ALL, Grouped.with(Serdes.Integer(), Serdes.String()))
+        texts.mapValues((k, v) -> 0)
+                .groupBy((k, v) -> ALL, Grouped.with(Serdes.Integer(), Serdes.Integer()))
                 .count()
                 .toStream()
                 .to(this.getDocumentCountTopic(), Produced.with(Serdes.Integer(), Serdes.Long()));

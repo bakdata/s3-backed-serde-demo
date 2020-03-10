@@ -30,7 +30,7 @@ dependencies {
     implementation(group = "com.bakdata.kafka", name = "error-handling", version = "1.0.0")
     val confluentVersion: String by project
     implementation(group = "io.confluent", name = "kafka-streams-avro-serde", version = confluentVersion)
-    implementation(group = "com.bakdata.common-kafka-streams", name = "common-kafka-streams", version = "1.3.3")
+    implementation(group = "com.bakdata.common-kafka-streams", name = "common-kafka-streams", version = "1.4.0")
 
     val junitVersion: String by project
     testImplementation(group = "org.junit.jupiter", name = "junit-jupiter-api", version = junitVersion)
