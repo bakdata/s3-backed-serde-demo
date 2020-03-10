@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "Document",
+  "namespace": "com.bakdata.kafka",
+  "fields": [
+    {
+      "name": "text",
+      "type": "string"
+    }
+  ]
+}
