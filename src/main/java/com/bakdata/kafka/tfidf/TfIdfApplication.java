@@ -13,6 +13,7 @@ import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.serialization.Serde;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import picocli.CommandLine.Option;
 
+@Setter
 @SuppressWarnings("UseOfPropertiesAsHashtable")
 @Slf4j
 public class TfIdfApplication extends KafkaStreamsApplication {
@@ -40,10 +42,10 @@ public class TfIdfApplication extends KafkaStreamsApplication {
     private static final String DOCUMENT_COUNT_STATE_STORE_NAME = "document-count";
     @SuppressWarnings("FieldMayBeStatic")
     @Option(names = "--s3-backed", arity = "0..1")
-    private final boolean useS3 = false;
+    private boolean useS3 = false;
     @SuppressWarnings("FieldMayBeStatic")
     @Option(names = "--as-document", arity = "0..1")
-    private final boolean asDocument = false;
+    private boolean asDocument = false;
 
     public static void main(final String[] args) {
         KafkaStreamsApplication.startApplication(new TfIdfApplication(), args);

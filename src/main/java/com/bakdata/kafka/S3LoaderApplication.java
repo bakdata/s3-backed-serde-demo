@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
+import lombok.Setter;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
@@ -27,9 +28,10 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import picocli.CommandLine;
 
+@Setter
 @SuppressWarnings("UseOfPropertiesAsHashtable")
 public class S3LoaderApplication extends KafkaStreamsApplication {
-    private static final AmazonS3 AMAZON_S3 = AmazonS3ClientBuilder.defaultClient();
+    private AmazonS3 s3 = AmazonS3ClientBuilder.defaultClient();
     @SuppressWarnings("FieldMayBeFinal")
     @CommandLine.Option(names = "--s3-backed", arity = "0..1")
     private boolean useS3 = false;
@@ -41,16 +43,6 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
         KafkaStreamsApplication.startApplication(new S3LoaderApplication(), args);
     }
 
-    private static String loadFromS3(final String key) {
-        final AmazonS3URI uri = new AmazonS3URI(key);
-        try (final S3Object object = AMAZON_S3.getObject(uri.getBucket(), uri.getKey());
-                final InputStream input = object.getObjectContent()) {
-            return IOUtils.toString(input);
-        } catch (final IOException e) {
-            throw new RuntimeException("Error reading object " + uri + " from S3", e);
-        }
-    }
-
     private static Document asDocument(final String text) {
         return Document.newBuilder().setText(text).build();
     }
@@ -59,7 +51,7 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
     public void buildTopology(final StreamsBuilder builder) {
         final KStream<String, String> stream = builder.stream(this.getInputTopics());
         final KStream<String, ProcessedValue<String, String>> extracted =
-                stream.mapValues(captureErrors(S3LoaderApplication::loadFromS3));
+                stream.mapValues(captureErrors(this::loadFromS3));
 
         final KStream<String, String> texts = extracted.flatMapValues(ProcessedValue::getValues);
 
@@ -84,6 +76,16 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
         return "s3-loader";
     }
 
+    private String loadFromS3(final String key) {
+        final AmazonS3URI uri = new AmazonS3URI(key);
+        try (final S3Object object = s3.getObject(uri.getBucket(), uri.getKey());
+                final InputStream input = object.getObjectContent()) {
+            return IOUtils.toString(input);
+        } catch (final IOException e) {
+            throw new RuntimeException("Error reading object " + uri + " from S3", e);
+        }
+    }
+
     @Override
     protected void runStreamsApplication() {
         try (final TopicClient topicClient = TopicClient
@@ -95,7 +97,7 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
         super.runStreamsApplication();
     }
 
-    private Serde<String> createOutputSerde() {
+    Serde<String> createOutputSerde() {
         final Serde<String> serde = this.useS3 ? new S3BackedSerde<>() : Serdes.String();
         final Properties kafkaProperties = this.getKafkaProperties();
         if (this.useS3) {
@@ -106,7 +108,7 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
         return serde;
     }
 
-    private Serde<Document> createOutputDocumentSerde() {
+    Serde<Document> createOutputDocumentSerde() {
         final Serde<Document> serde = this.useS3 ? new S3BackedSerde<>() : new SpecificAvroSerde<>();
         final Properties kafkaProperties = this.getKafkaProperties();
         if (this.useS3) {
@@ -117,7 +119,7 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
         return serde;
     }
 
-    private Serde<DeadLetter> createDeadLetterSerde() {
+    Serde<DeadLetter> createDeadLetterSerde() {
         final Serde<DeadLetter> serde = new SpecificAvroSerde<>();
         final Map<String, Object> config = PropertiesUtil.originals(this.getKafkaProperties());
         serde.configure(config, false);

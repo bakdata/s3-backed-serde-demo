@@ -77,8 +77,8 @@ public class S3ProducerApplication implements Runnable {
     private void sendBatch(final Producer<? super String, ? super String> producer, final ListObjectsV2Result objects) {
         final List<S3ObjectSummary> summaries = objects.getObjectSummaries();
         for (final S3ObjectSummary summary : summaries) {
-            final String key = summary.getKey();
-            producer.send(new ProducerRecord<>(this.getOutputTopic(), key, key));
+            final String uri = "s3://" + summary.getBucketName() + "/" + summary.getKey();
+            producer.send(new ProducerRecord<>(this.getOutputTopic(), uri, uri));
         }
     }
 }
