@@ -7,10 +7,12 @@ import com.bakdata.common_kafka_streams.KafkaStreamsApplication;
 import com.bakdata.kafka.Document;
 import com.bakdata.kafka.S3BackedSerde;
 import com.bakdata.kafka.S3BackedSerdeConfig;
+import com.bakdata.kafka.S3LoaderApplication;
 import com.bakdata.kafka.util.TopicClient;
 import com.bakdata.kafka.util.TopicInfo;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Properties;
 import lombok.Setter;
@@ -38,17 +40,22 @@ public class TfIdfApplication extends KafkaStreamsApplication {
     static final int ALL = 0;
     private static final String DOCUMENT_COUNT_TOPIC_SUFFIX = "-document-counts";
     private static final String TERM_FREQUENCIES_TOPIC_SUFFIX = "-term-frequencies";
+    private static final String MOST_IMPORTANT_TERM_TOPIC_SUFFIX = "-most-important-term";
     private static final String TERM_OCCURRENCES_STATE_STORE_NAME = "term-occurrences";
     private static final String DOCUMENT_COUNT_STATE_STORE_NAME = "document-count";
-    @SuppressWarnings("FieldMayBeStatic")
+    private static final Comparator<TfIdfScore> TF_IDF_SCORE_COMPARATOR =
+            Comparator.comparing(TfIdfScore::getTfIdf).thenComparing(TfIdfScore::getTerm);
     @Option(names = "--s3-backed", arity = "0..1")
     private boolean useS3 = false;
-    @SuppressWarnings("FieldMayBeStatic")
     @Option(names = "--as-document", arity = "0..1")
     private boolean asDocument = false;
 
     public static void main(final String[] args) {
-        KafkaStreamsApplication.startApplication(new TfIdfApplication(), args);
+        S3LoaderApplication.startApplication(new TfIdfApplication(), args);
+    }
+
+    private static TfIdfScore higher(final TfIdfScore score1, final TfIdfScore score2) {
+        return TF_IDF_SCORE_COMPARATOR.compare(score1, score2) >= 0 ? score1 : score2;
     }
 
     @Override
@@ -83,8 +90,8 @@ public class TfIdfApplication extends KafkaStreamsApplication {
         final String termOccurrenceStoreName = termOccurrenceStore.name();
 
         // compute all tfs in a document
-        final KStream<String, TermFrequency> termFrequencies = texts
-                .flatTransform(() -> new TermFrequencyCalculator(documentCountStore.name()));
+        final KStream<String, TermFrequency> termFrequencies =
+                texts.flatTransform(() -> new TermFrequencyCalculator(documentCountStore.name()));
 
         final KStream<String, TfIdfScore> tfIdfs = termFrequencies
                 // repartition by term (necessary for state store)
@@ -93,11 +100,20 @@ public class TfIdfApplication extends KafkaStreamsApplication {
                 .transform(() -> new TfIdfCalculator(termOccurrenceStoreName), termOccurrenceStoreName);
 
         tfIdfs.to(this.getOutputTopic(), Produced.valueSerde(this.createAvroSerde()));
+
+        tfIdfs.groupByKey(Grouped.with(null, this.createAvroSerde()))
+                .reduce(TfIdfApplication::higher)
+                .toStream()
+                .to(this.getMostImportantTermTopic(), Produced.valueSerde(this.createAvroSerde()));
     }
 
     @Override
     public String getUniqueAppId() {
         return "tf-idf";
+    }
+
+    String getMostImportantTermTopic() {
+        return this.getOutputTopic() + MOST_IMPORTANT_TERM_TOPIC_SUFFIX;
     }
 
     @Override
@@ -122,6 +138,8 @@ public class TfIdfApplication extends KafkaStreamsApplication {
             final Map<String, String> config = emptyMap();
             topicClient.createIfNotExists(this.getOutputTopic(), description, config);
             topicClient.createIfNotExists(this.getTermFrequenciesTopic(), description, config);
+            topicClient.createIfNotExists(this.getDocumentCountTopic(), description, config);
+            topicClient.createIfNotExists(this.getMostImportantTermTopic(), description, config);
         }
         super.runStreamsApplication();
     }

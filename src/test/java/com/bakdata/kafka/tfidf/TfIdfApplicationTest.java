@@ -72,6 +72,16 @@ class TfIdfApplicationTest {
                     assertThat(record.key()).isEqualTo(ALL);
                     assertThat(record.value()).isEqualTo(1L);
                 });
+        final List<ProducerRecord<String, TfIdfScore>> mostImportantTerm1 = this.readMostImportantTerm();
+        assertThat(mostImportantTerm1)
+                .hasSize(1)
+                .allSatisfy(record -> assertThat(record.key()).isEqualTo("1"))
+                .extracting(ProducerRecord::value)
+                .allSatisfy(score -> {
+                    assertThat(score.getTerm()).isEqualTo("foo");
+                    // all terms occur in every document, thus idf is 0.0
+                    assertThat(score.getTfIdf()).isEqualTo(0.0);
+                });
         this.input().add("2", "baz baz qux");
         final List<ProducerRecord<String, TfIdfScore>> output2 = this.readOutput();
         assertThat(output2)
@@ -94,6 +104,16 @@ class TfIdfApplicationTest {
                 .anySatisfy(record -> {
                     assertThat(record.key()).isEqualTo(ALL);
                     assertThat(record.value()).isEqualTo(2L);
+                });
+        final List<ProducerRecord<String, TfIdfScore>> mostImportantTerm2 = this.readMostImportantTerm();
+        assertThat(mostImportantTerm2)
+                .hasSize(1)
+                .allSatisfy(record -> assertThat(record.key()).isEqualTo("2"))
+                .extracting(ProducerRecord::value)
+                .allSatisfy(score -> {
+                    assertThat(score.getTerm()).isEqualTo("baz");
+                    // tf = 2/2; idf = ln(2/1)
+                    assertThat(score.getTfIdf()).isCloseTo(0.693, ONE_THOUSANDTH);
                 });
         this.input().add("3", "foo foo foo bar bar quux");
         final List<ProducerRecord<String, TfIdfScore>> output3 = this.readOutput();
@@ -122,6 +142,16 @@ class TfIdfApplicationTest {
                 .anySatisfy(record -> {
                     assertThat(record.key()).isEqualTo(ALL);
                     assertThat(record.value()).isEqualTo(3L);
+                });
+        final List<ProducerRecord<String, TfIdfScore>> mostImportantTerm3 = this.readMostImportantTerm();
+        assertThat(mostImportantTerm3)
+                .hasSize(1)
+                .allSatisfy(record -> assertThat(record.key()).isEqualTo("3"))
+                .extracting(ProducerRecord::value)
+                .allSatisfy(score -> {
+                    assertThat(score.getTerm()).isEqualTo("foo");
+                    // tf = 3/3; idf = ln(3/2)
+                    assertThat(score.getTfIdf()).isCloseTo(0.405, ONE_THOUSANDTH);
                 });
     }
 
@@ -206,6 +236,12 @@ class TfIdfApplicationTest {
 
     private List<ProducerRecord<String, TfIdfScore>> readOutput() {
         return Seq.seq(this.topology.streamOutput(this.tfIdf.getOutputTopic())
+                .withValueSerde(this.tfIdf.<TfIdfScore>createAvroSerde()))
+                .toList();
+    }
+
+    private List<ProducerRecord<String, TfIdfScore>> readMostImportantTerm() {
+        return Seq.seq(this.topology.tableOutput(this.tfIdf.getMostImportantTermTopic())
                 .withValueSerde(this.tfIdf.<TfIdfScore>createAvroSerde()))
                 .toList();
     }

@@ -2,7 +2,6 @@ description = "Demo of S3-backed SerDe"
 
 plugins {
     java
-    id("net.researchgate.release") version "2.8.0"
     id("io.freefair.lombok") version "3.8.0"
     id("com.commercehub.gradle.plugin.avro") version "0.16.0"
 }

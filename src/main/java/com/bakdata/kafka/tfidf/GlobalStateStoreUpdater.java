@@ -2,10 +2,12 @@ package com.bakdata.kafka.tfidf;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+@Slf4j
 @RequiredArgsConstructor
 class GlobalStateStoreUpdater<K, V> implements Processor<K, V> {
     private final @NonNull String stateStoreName;
@@ -19,6 +21,7 @@ class GlobalStateStoreUpdater<K, V> implements Processor<K, V> {
 
     @Override
     public void process(final K key, final V value) {
+        log.info("Updating global state store {} with ({}, {})", this.stateStoreName, key, value);
         this.stateStore.put(key, value);
     }
 

@@ -15,6 +15,7 @@ import com.bakdata.kafka.util.TopicInfo;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
@@ -32,15 +33,17 @@ import picocli.CommandLine;
 @SuppressWarnings("UseOfPropertiesAsHashtable")
 public class S3LoaderApplication extends KafkaStreamsApplication {
     private AmazonS3 s3 = AmazonS3ClientBuilder.defaultClient();
-    @SuppressWarnings("FieldMayBeFinal")
     @CommandLine.Option(names = "--s3-backed", arity = "0..1")
     private boolean useS3 = false;
-    @SuppressWarnings("FieldMayBeFinal")
     @CommandLine.Option(names = "--as-document", arity = "0..1")
     private boolean asDocument = false;
 
     public static void main(final String[] args) {
-        KafkaStreamsApplication.startApplication(new S3LoaderApplication(), args);
+        startApplication(new S3LoaderApplication(), args);
+    }
+
+    public static void startApplication(final KafkaStreamsApplication app, final String[] args) {
+        new CommandLine(app).setOut(new PrintWriter(System.out)).execute(args);
     }
 
     private static Document asDocument(final String text) {
@@ -93,6 +96,7 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
             final TopicInfo description = topicClient.describe(this.getInputTopic());
             final Map<String, String> config = emptyMap();
             topicClient.createIfNotExists(this.getOutputTopic(), description, config);
+            topicClient.createIfNotExists(this.getErrorTopic(), description, config);
         }
         super.runStreamsApplication();
     }
