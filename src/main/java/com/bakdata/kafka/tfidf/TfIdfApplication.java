@@ -4,12 +4,11 @@ import static com.bakdata.kafka.util.PropertiesUtil.originals;
 import static java.util.Collections.emptyMap;
 
 import com.bakdata.common_kafka_streams.KafkaStreamsApplication;
+import com.bakdata.common_kafka_streams.util.TopicClient;
+import com.bakdata.common_kafka_streams.util.TopicSettings;
 import com.bakdata.kafka.Document;
 import com.bakdata.kafka.S3BackedSerde;
 import com.bakdata.kafka.S3BackedSerdeConfig;
-import com.bakdata.kafka.S3LoaderApplication;
-import com.bakdata.kafka.util.TopicClient;
-import com.bakdata.kafka.util.TopicInfo;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import java.time.Duration;
 import java.util.Comparator;
@@ -51,7 +50,7 @@ public class TfIdfApplication extends KafkaStreamsApplication {
     private boolean asDocument = false;
 
     public static void main(final String[] args) {
-        S3LoaderApplication.startApplication(new TfIdfApplication(), args);
+        startApplication(new TfIdfApplication(), args);
     }
 
     private static TfIdfScore higher(final TfIdfScore score1, final TfIdfScore score2) {
@@ -134,12 +133,12 @@ public class TfIdfApplication extends KafkaStreamsApplication {
     protected void runStreamsApplication() {
         try (final TopicClient topicClient = TopicClient
                 .create(originals(this.getKafkaProperties()), Duration.ofSeconds(10L))) {
-            final TopicInfo description = topicClient.describe(this.getInputTopic());
+            final TopicSettings settings = topicClient.describe(this.getInputTopic());
             final Map<String, String> config = emptyMap();
-            topicClient.createIfNotExists(this.getOutputTopic(), description, config);
-            topicClient.createIfNotExists(this.getTermFrequenciesTopic(), description, config);
-            topicClient.createIfNotExists(this.getDocumentCountTopic(), description, config);
-            topicClient.createIfNotExists(this.getMostImportantTermTopic(), description, config);
+            topicClient.createIfNotExists(this.getOutputTopic(), settings, config);
+            topicClient.createIfNotExists(this.getTermFrequenciesTopic(), settings, config);
+            topicClient.createIfNotExists(this.getDocumentCountTopic(), settings, config);
+            topicClient.createIfNotExists(this.getMostImportantTermTopic(), settings, config);
         }
         super.runStreamsApplication();
     }

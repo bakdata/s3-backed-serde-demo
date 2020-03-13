@@ -1,6 +1,5 @@
 package com.bakdata.kafka;
 
-import static com.bakdata.kafka.ErrorCapturingValueMapper.captureErrors;
 import static java.util.Collections.emptyMap;
 
 import com.amazonaws.services.s3.AmazonS3;
@@ -9,17 +8,17 @@ import com.amazonaws.services.s3.AmazonS3URI;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.util.IOUtils;
 import com.bakdata.common_kafka_streams.KafkaStreamsApplication;
+import com.bakdata.common_kafka_streams.util.TopicClient;
+import com.bakdata.common_kafka_streams.util.TopicSettings;
 import com.bakdata.kafka.util.PropertiesUtil;
-import com.bakdata.kafka.util.TopicClient;
-import com.bakdata.kafka.util.TopicInfo;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintWriter;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
@@ -29,6 +28,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import picocli.CommandLine;
 
+@Slf4j
 @Setter
 @SuppressWarnings("UseOfPropertiesAsHashtable")
 public class S3LoaderApplication extends KafkaStreamsApplication {
@@ -42,21 +42,15 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
         startApplication(new S3LoaderApplication(), args);
     }
 
-    public static void startApplication(final KafkaStreamsApplication app, final String[] args) {
-        new CommandLine(app).setOut(new PrintWriter(System.out)).execute(args);
-    }
-
     private static Document asDocument(final String text) {
         return Document.newBuilder().setText(text).build();
     }
 
     @Override
     public void buildTopology(final StreamsBuilder builder) {
-        final KStream<String, String> stream = builder.stream(this.getInputTopics());
-        final KStream<String, ProcessedValue<String, String>> extracted =
-                stream.mapValues(captureErrors(this::loadFromS3));
+        final KStream<String, String> s3Files = builder.stream(this.getInputTopics());
 
-        final KStream<String, String> texts = extracted.flatMapValues(ProcessedValue::getValues);
+        final KStream<String, String> texts = s3Files.mapValues(this::loadFromS3);
 
         // write to output topic
         if (this.asDocument) {
@@ -66,12 +60,6 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
             texts
                     .to(this.getOutputTopic(), Produced.valueSerde(this.createOutputSerde()));
         }
-
-        // write errors to dead letter topic
-        extracted
-                .flatMapValues(ProcessedValue::getErrors)
-                .mapValues(e -> e.createDeadLetter("Error loading document from S3"))
-                .to(this.getErrorTopic(), Produced.valueSerde(this.createDeadLetterSerde()));
     }
 
     @Override
@@ -81,8 +69,9 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
 
     private String loadFromS3(final String key) {
         final AmazonS3URI uri = new AmazonS3URI(key);
-        try (final S3Object object = s3.getObject(uri.getBucket(), uri.getKey());
+        try (final S3Object object = this.s3.getObject(uri.getBucket(), uri.getKey());
                 final InputStream input = object.getObjectContent()) {
+            log.info("Loading {}", uri);
             return IOUtils.toString(input);
         } catch (final IOException e) {
             throw new RuntimeException("Error reading object " + uri + " from S3", e);
@@ -93,10 +82,9 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
     protected void runStreamsApplication() {
         try (final TopicClient topicClient = TopicClient
                 .create(PropertiesUtil.originals(this.getKafkaProperties()), Duration.ofSeconds(10L))) {
-            final TopicInfo description = topicClient.describe(this.getInputTopic());
+            final TopicSettings settings = topicClient.describe(this.getInputTopic());
             final Map<String, String> config = emptyMap();
-            topicClient.createIfNotExists(this.getOutputTopic(), description, config);
-            topicClient.createIfNotExists(this.getErrorTopic(), description, config);
+            topicClient.createIfNotExists(this.getOutputTopic(), settings, config);
         }
         super.runStreamsApplication();
     }
@@ -119,13 +107,6 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
             kafkaProperties.put(S3BackedSerdeConfig.VALUE_SERDE_CLASS_CONFIG, SpecificAvroSerde.class);
         }
         final Map<String, Object> config = PropertiesUtil.originals(kafkaProperties);
-        serde.configure(config, false);
-        return serde;
-    }
-
-    Serde<DeadLetter> createDeadLetterSerde() {
-        final Serde<DeadLetter> serde = new SpecificAvroSerde<>();
-        final Map<String, Object> config = PropertiesUtil.originals(this.getKafkaProperties());
         serde.configure(config, false);
         return serde;
     }

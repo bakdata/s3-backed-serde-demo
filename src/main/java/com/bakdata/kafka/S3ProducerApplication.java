@@ -9,8 +9,8 @@ import com.amazonaws.services.s3.AmazonS3URI;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.bakdata.kafka.util.TopicClient;
-import com.bakdata.kafka.util.TopicInfo;
+import com.bakdata.common_kafka_streams.util.TopicClient;
+import com.bakdata.common_kafka_streams.util.TopicSettings;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +29,7 @@ import picocli.CommandLine;
 @Data
 public class S3ProducerApplication implements Runnable {
     private static final AmazonS3 AMAZON_S3 = AmazonS3ClientBuilder.defaultClient();
-    private static final TopicInfo DEFAULT_TOPIC_CONFIG = TopicInfo.builder()
+    private static final TopicSettings DEFAULT_TOPIC_SETTINGS = TopicSettings.builder()
             .partitions(3)
             .replicationFactor((short) 1)
             .build();
@@ -55,40 +55,38 @@ public class S3ProducerApplication implements Runnable {
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.getBrokers());
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "s3-producer");
         this.createTopics(properties);
-        final AmazonS3URI uri = new AmazonS3URI(this.s3Path);
-        final String bucket = uri.getBucket();
-        final String prefix = uri.getKey();
-        final ListObjectsV2Result initialObjects = AMAZON_S3.listObjectsV2(bucket, prefix);
-        this.sendBatch(properties, initialObjects);
-        while (initialObjects.isTruncated()) {
-            final ListObjectsV2Request request = new ListObjectsV2Request()
-                    .withContinuationToken(initialObjects.getNextContinuationToken())
-                    .withBucketName(bucket)
-                    .withPrefix(prefix);
-            final ListObjectsV2Result objects = AMAZON_S3.listObjectsV2(request);
-            this.sendBatch(properties, objects);
+        try (final Producer<String, String> producer = new KafkaProducer<>(properties)) {
+            final AmazonS3URI uri = new AmazonS3URI(this.s3Path);
+            final String bucket = uri.getBucket();
+            final String prefix = uri.getKey();
+            final ListObjectsV2Result initialObjects = AMAZON_S3.listObjectsV2(bucket, prefix);
+            this.sendBatch(producer, initialObjects);
+            while (initialObjects.isTruncated()) {
+                final ListObjectsV2Request request = new ListObjectsV2Request()
+                        .withContinuationToken(initialObjects.getNextContinuationToken())
+                        .withBucketName(bucket)
+                        .withPrefix(prefix);
+                final ListObjectsV2Result objects = AMAZON_S3.listObjectsV2(request);
+                this.sendBatch(producer, objects);
+            }
         }
     }
 
     private void createTopics(final Properties properties) {
         try (final TopicClient topicClient = TopicClient.create(originals(properties), Duration.ofSeconds(10L))) {
             final Map<String, String> config = emptyMap();
-            topicClient.createIfNotExists(this.getOutputTopic(), DEFAULT_TOPIC_CONFIG, config);
+            topicClient.createIfNotExists(this.getOutputTopic(), DEFAULT_TOPIC_SETTINGS, config);
         }
     }
 
-    private void sendBatch(final Properties properties, final ListObjectsV2Result objects) {
+    private void sendBatch(final Producer<? super String, ? super String> producer, final ListObjectsV2Result objects) {
         final List<S3ObjectSummary> summaries = objects.getObjectSummaries();
         final Pattern pattern = Pattern.compile(this.filter);
         for (final S3ObjectSummary summary : summaries) {
             final String key = summary.getKey();
             if (pattern.matcher(key).find()) {
-                // open producer for each record in order to flush with every record
-                // this allows debug-demoing
-                try (final Producer<String, String> producer = new KafkaProducer<>(properties)) {
-                    final String uri = "s3://" + summary.getBucketName() + "/" + key;
-                    producer.send(new ProducerRecord<>(this.getOutputTopic(), uri, uri));
-                }
+                final String uri = "s3://" + summary.getBucketName() + "/" + key;
+                producer.send(new ProducerRecord<>(this.getOutputTopic(), uri, uri));
             }
         }
     }

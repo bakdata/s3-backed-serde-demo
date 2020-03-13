@@ -60,8 +60,6 @@ class S3LoaderApplicationTest {
                 .allSatisfy(record -> assertThat(record.key()).isEqualTo("bar"))
                 .extracting(ProducerRecord::value)
                 .allSatisfy(content -> assertThat(content).isEqualTo("foo"));
-        assertThat(this.readErrors())
-                .isEmpty();
         this.s3Client.deleteBucket(bucket);
     }
 
@@ -80,8 +78,6 @@ class S3LoaderApplicationTest {
                 .allSatisfy(record -> assertThat(record.key()).isEqualTo("bar"))
                 .extracting(ProducerRecord::value)
                 .allSatisfy(content -> assertThat(content.getText()).isEqualTo("foo"));
-        assertThat(this.readErrors())
-                .isEmpty();
         this.s3Client.deleteBucket(bucket);
     }
 
@@ -112,34 +108,11 @@ class S3LoaderApplicationTest {
                 .allSatisfy(record -> assertThat(record.key()).isEqualTo("bar"))
                 .extracting(ProducerRecord::value)
                 .allSatisfy(content -> assertThat(content).isEqualTo("foo"));
-        assertThat(this.readErrors())
-                .isEmpty();
         assertThat(this.s3Client.listObjectsV2(s3BackedBucket).getObjectSummaries())
                 .hasSize(1)
                 .allSatisfy(summary -> assertThat(summary.getKey()).startsWith(this.app.getOutputTopic()));
         this.s3Client.deleteBucket(bucket);
         this.s3Client.deleteBucket(s3BackedBucket);
-    }
-
-    @Test
-    void shouldSendDeadLetterIfObjectDoesNotExist() {
-        this.topology.start();
-        final String bucket = "bucket";
-        final String key = "key";
-        final String uri = "s3://" + bucket + "/" + key;
-        this.topology.input()
-                .add("bar", uri);
-        assertThat(this.readErrors())
-                .hasSize(1)
-                .allSatisfy(record -> assertThat(record.key()).isEqualTo("bar"))
-                .extracting(ProducerRecord::value)
-                .allSatisfy(content -> {
-                    assertThat(content.getDescription()).isEqualTo("Error loading document from S3");
-                    assertThat(content.getInputValue()).isEqualTo(uri);
-                    assertThat(content.getCause().getMessage()).startsWith("The specified bucket does not exist.");
-                });
-        assertThat(this.readOutput())
-                .isEmpty();
     }
 
     private List<ProducerRecord<String, String>> readOutput() {
@@ -155,11 +128,5 @@ class S3LoaderApplicationTest {
 
     private List<ProducerRecord<String, Document>> readOutputAsDocument() {
         return this.readOutput(this.app.createOutputDocumentSerde());
-    }
-
-    private List<ProducerRecord<String, DeadLetter>> readErrors() {
-        return Seq.seq(this.topology.streamOutput(this.app.getErrorTopic())
-                .withValueSerde(this.app.createDeadLetterSerde()))
-                .toList();
     }
 }

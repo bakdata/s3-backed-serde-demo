@@ -26,10 +26,9 @@ configure<JavaPluginConvention> {
 dependencies {
     implementation(group = "com.bakdata.seq2", name = "seq2", version = "1.0.0")
     implementation(group = "com.bakdata.kafka", name = "s3-backed-serde", version = "1.1.2")
-    implementation(group = "com.bakdata.kafka", name = "error-handling", version = "1.0.0")
     val confluentVersion: String by project
     implementation(group = "io.confluent", name = "kafka-streams-avro-serde", version = confluentVersion)
-    implementation(group = "com.bakdata.common-kafka-streams", name = "common-kafka-streams", version = "1.4.0")
+    implementation(group = "com.bakdata.common-kafka-streams", name = "common-kafka-streams", version = "1.4.1")
 
     val junitVersion: String by project
     testImplementation(group = "org.junit.jupiter", name = "junit-jupiter-api", version = junitVersion)
