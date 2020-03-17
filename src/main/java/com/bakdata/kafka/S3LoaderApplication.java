@@ -64,7 +64,7 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
 
     @Override
     public String getUniqueAppId() {
-        return "s3-loader";
+        return "s3-loader-" + this.getOutputTopic();
     }
 
     private String loadFromS3(final String key) {

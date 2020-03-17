@@ -108,7 +108,7 @@ public class TfIdfApplication extends KafkaStreamsApplication {
 
     @Override
     public String getUniqueAppId() {
-        return "tf-idf";
+        return "tf-idf-" + this.getOutputTopic();
     }
 
     String getMostImportantTermTopic() {

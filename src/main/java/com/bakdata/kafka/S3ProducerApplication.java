@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -26,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import picocli.CommandLine;
 
 @SuppressWarnings({"UseOfPropertiesAsHashtable", "ObjectAllocationInLoop"})
+@Slf4j
 @Data
 public class S3ProducerApplication implements Runnable {
     private static final AmazonS3 AMAZON_S3 = AmazonS3ClientBuilder.defaultClient();
@@ -86,6 +88,7 @@ public class S3ProducerApplication implements Runnable {
             final String key = summary.getKey();
             if (pattern.matcher(key).find()) {
                 final String uri = "s3://" + summary.getBucketName() + "/" + key;
+                log.info("Found file {}", uri);
                 producer.send(new ProducerRecord<>(this.getOutputTopic(), uri, uri));
             }
         }

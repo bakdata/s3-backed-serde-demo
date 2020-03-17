@@ -50,5 +50,15 @@ services:
       CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
       CONNECT_PLUGIN_PATH: /connect-plugins,/usr/share/java,/usr/share/confluent-hub-components
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      AWS_REGION: ${AWS_DEFAULT_REGION}
     ports:
       - "8083:8083"
+  elasticsearch:
+    image: elasticsearch:7.6.1
+    environment:
+      discovery.type: single-node
+    ports:
+      - "9200:9200"
