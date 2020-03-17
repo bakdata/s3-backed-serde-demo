@@ -14,8 +14,8 @@ s3_serializer = S3BackedSerializer(output_topic=None,
 codecs.register(value_serializer, str_serializer | s3_serializer)
 schema = faust.Schema(
     key_type=str,
-    value_type=str,
     key_serializer="raw",
+    value_type=str,
     value_serializer=value_serializer
 )
 texts_topic = app.topic("texts", schema=schema)
@@ -25,3 +25,7 @@ texts_topic = app.topic("texts", schema=schema)
 async def print_length(texts):
     async for key, text in texts.items():
         print("{} has {} characters".format(key, len(text)))
+
+
+if __name__ == '__main__':
+    app.main()
