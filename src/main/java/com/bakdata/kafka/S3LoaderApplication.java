@@ -58,7 +58,7 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
                     .to(this.getOutputTopic(), Produced.valueSerde(this.createOutputDocumentSerde()));
         } else {
             texts
-                    .to(this.getOutputTopic(), Produced.valueSerde(this.createOutputSerde()));
+                    .to(this.getOutputTopic(), Produced.valueSerde(this.createOutputStringSerde()));
         }
     }
 
@@ -89,7 +89,7 @@ public class S3LoaderApplication extends KafkaStreamsApplication {
         super.runStreamsApplication();
     }
 
-    Serde<String> createOutputSerde() {
+    Serde<String> createOutputStringSerde() {
         final Serde<String> serde = this.useS3 ? new S3BackedSerde<>() : Serdes.String();
         final Properties kafkaProperties = this.getKafkaProperties();
         if (this.useS3) {

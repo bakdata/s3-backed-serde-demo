@@ -116,7 +116,7 @@ class S3LoaderApplicationTest {
     }
 
     private List<ProducerRecord<String, String>> readOutput() {
-        final Serde<String> serde = this.app.createOutputSerde();
+        final Serde<String> serde = this.app.createOutputStringSerde();
         return this.readOutput(serde);
     }
 
