@@ -1,0 +1,2 @@
+faust==1.8.0
+faust-s3-backed-serializer==1.0.1
